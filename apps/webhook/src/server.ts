@@ -52,10 +52,17 @@ app.get<{ Params: { app_id: string }; Querystring: { signature?: string; timesta
 
 // WeChat's POST push of messages and events.
 // Phase 1: log and return 'success' to keep WeChat happy.
-// Phase 3: implement the real inbound flow.
+// Phase 3: implement the real inbound flow (XML content type parser, signature
+// verify, decrypt, persist, enqueue).
 app.post<{ Params: { app_id: string } }>('/webhook/:app_id', async (request, reply) => {
   const { app_id } = request.params;
-  request.log.info({ app_id, body_size: request.rawBody?.length ?? 0 }, 'inbound POST (placeholder)');
+  const bodyLength =
+    typeof request.body === 'string'
+      ? request.body.length
+      : request.body
+        ? JSON.stringify(request.body).length
+        : 0;
+  request.log.info({ app_id, body_size: bodyLength }, 'inbound POST (placeholder)');
   return reply.status(200).send('success');
 });
 
