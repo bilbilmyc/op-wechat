@@ -6,12 +6,16 @@
 
 ## 1. Background and Goals
 
-`op-wechat` is a self-hostable operations backend for WeChat Official Accounts (公众号). It centralizes the workflows a single account **admin** (the operator who logs into this product) needs: fan management, customer-service reply, mass broadcast, and auto-reply rules. v1 is single-tenant (one installation = one public account, one or more admin users). The product exists to remove the need to log into 微信公众平台 for routine operations and to expose capabilities the official console does not provide (rules, scheduling, multi-admin reply).
+`op-wechat` is a self-hostable operations backend for WeChat Official Accounts (公众号), with a long-term direction toward the WeChat Open Platform (开放平台) — multi-app identity bridging, unionid-driven fan linking, and third-party developer tooling. The "op" in the name stands for **open platform**.
 
-### Open questions (resolve before implementation)
+v1 ships the 公众号 operations surface (fan management, customer-service reply, mass broadcast, auto-reply rules) for a single public account. v1 also lays the foundation for the open-platform direction by **collecting and storing `unionid`** on every fan and by structuring `wechat_apps` as a multi-row table — even though the v1 UI assumes a single app. This means v2 can add multi-app / unionid bridging / cross-app fan linking without a schema migration.
 
-- **"op" abbreviation** — likely "operations platform" or "official account platform" or "open platform". Repo name is fixed; the meaning does not affect v1 architecture, but should be documented in the README for clarity.
-- **Will the operator have only one 公众号 or multiple?** v1 supports multi-`wechat_apps` at the schema level but not at the UI level. If the answer is "multiple from day 1", v1 scope needs to grow.
+The product exists to remove the need to log into 微信公众平台 for routine operations and to expose capabilities the official console does not provide (rules, scheduling, multi-admin reply, and eventually cross-app identity).
+
+### Resolved decisions
+
+- **"op" meaning** — "open platform" (confirmed 2026-06-26).
+- **Multi-公众号 in v1** — single app in v1 UI. Multi-app UI deferred to v2. See §11 for the full open-platform deferral.
 
 ## 2. v1 Scope
 
@@ -282,7 +286,7 @@ M8. Polish: error pages, empty states, settings page, basic docs.
 - Analytics: message volume, response time, fan growth charts
 - Ticketing / SLA tracking
 - Customer-service @-mentions, multi-operator concurrent editing
-- Open platform / unionid bridging (the "op" angle if that's the intended meaning)
+- **Open platform surface (the "op" roadmap)**: multi-app UI / switching, unionid-driven cross-app fan linking, mini-program / web-app / mobile-app identity bridge, third-party developer API keys and webhook routing, 开放平台代开发模式支持
 
 ## 12. Risks and Mitigations
 
