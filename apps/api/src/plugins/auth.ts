@@ -37,12 +37,19 @@ export default fp(
     await app.register(fastifySession, {
       secret: sessionSecret,
       cookie: {
-        secure: process.env.NODE_ENV === 'production',
+        // Auto-detect from the X-Forwarded-Proto in production, force off for
+        // local HTTP dev. Setting false explicitly here overrides the
+        // default "auto" behaviour that would mark the cookie Secure when
+        // the request comes in through a TLS-terminating proxy.
+        secure: process.env.NODE_ENV === 'production' ? 'auto' : false,
         httpOnly: true,
         sameSite: 'lax',
         maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
       },
-      saveUninitialized: false,
+      // saveUninitialized: true ensures the session cookie is set on the very
+      // first login response (even if @fastify/session's modified-tracking
+      // doesn't see the manual property assignment).
+      saveUninitialized: true,
     });
 
     app.decorate('authenticate', async (request: FastifyRequest, reply: FastifyReply) => {

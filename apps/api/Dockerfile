@@ -15,6 +15,16 @@ COPY packages/shared/package.json ./packages/shared/
 
 RUN npm install --no-audit --no-fund
 
+# Prisma 5.22's query engine is built against libssl 1.1. Debian 12 (bookworm)
+# only ships libssl 3, so we pull libssl 1.1 from the bullseye archive repo.
+# This adds a few MB to the image but unblocks Prisma without an upgrade.
+# When Prisma is upgraded to 6.x (better openssl detection), this can go.
+RUN echo 'deb http://archive.debian.org/debian bullseye main' > /etc/apt/sources.list.d/bullseye.list \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends libssl1.1 ca-certificates \
+ && rm -f /etc/apt/sources.list.d/bullseye.list \
+ && rm -rf /var/lib/apt/lists/*
+
 # Now copy the rest of the source
 COPY . .
 

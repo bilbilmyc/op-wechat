@@ -28,6 +28,12 @@ export default async function authRoutes(app: FastifyInstance) {
       });
     }
     request.session.adminId = admin.id;
+    // Explicitly save the session so the Set-Cookie header is on this response.
+    // @fastify/session v10's onResponse save hook should also do this, but
+    // we've seen it miss manual property assignments in some setups.
+    await new Promise<void>((resolve, reject) =>
+      request.session.save((err: Error | null | undefined) => (err ? reject(err) : resolve())),
+    );
     return reply.send({
       id: admin.id,
       email: admin.email,
