@@ -8,6 +8,7 @@ import fp from 'fastify-plugin';
 import fastifyCookie from '@fastify/cookie';
 import fastifySession from '@fastify/session';
 import bcrypt from 'bcryptjs';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { Admin } from '@prisma/client';
 
 declare module 'fastify' {
@@ -18,7 +19,7 @@ declare module 'fastify' {
     admin?: Admin;
   }
   interface FastifyInstance {
-    authenticate: (request: any, reply: any) => Promise<void>;
+    authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
 }
 
@@ -44,7 +45,7 @@ export default fp(
       saveUninitialized: false,
     });
 
-    app.decorate('authenticate', async (request: any, reply: any) => {
+    app.decorate('authenticate', async (request: FastifyRequest, reply: FastifyReply) => {
       if (!request.session?.adminId) {
         return reply.status(401).send({
           code: 'UNAUTHENTICATED',

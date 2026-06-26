@@ -26,7 +26,7 @@ declare module 'fastify' {
   }
 }
 
-class WechatTokenCache {
+export class WechatTokenCache {
   private cache = new LRUCache<string, TokenEntry>({ max: LRU_MAX, ttl: TTL_MS });
   private inflight = new Map<string, Promise<string>>();
 

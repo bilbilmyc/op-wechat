@@ -5,7 +5,8 @@
   "type": "module",
   "main": "./dist/server.js",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "npm run build -w @op-wechat/shared && tsx watch src/server.ts",
+    "build:shared": "npm run build -w @op-wechat/shared",
     "build": "tsc",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
