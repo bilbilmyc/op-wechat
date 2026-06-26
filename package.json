@@ -16,7 +16,11 @@
     "test": "npm run test --workspaces --if-present",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p apps/api && tsc --noEmit -p apps/webhook && tsc --noEmit -p apps/scheduler && tsc --noEmit -p packages/shared",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "db:migrate": "npm run db:migrate -w apps/api",
+    "db:seed": "npm run db:seed -w apps/api",
+    "db:studio": "npm run db:studio -w apps/api",
+    "db:reset": "npm run db:reset -w apps/api"
   },
   "devDependencies": {
     "@types/node": "^20.11.30",

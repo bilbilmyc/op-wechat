@@ -1,5 +1,7 @@
 # Single-stage Dockerfile for Phase 1. Multi-stage build deferred to M8 polish.
-FROM node:20-alpine
+# Use Debian slim (not Alpine) because Prisma's runtime OpenSSL detection is
+# more reliable on glibc than musl.
+FROM node:20-slim
 
 WORKDIR /repo
 
@@ -11,13 +13,17 @@ COPY apps/scheduler/package.json ./apps/scheduler/
 COPY apps/web/package.json ./apps/web/
 COPY packages/shared/package.json ./packages/shared/
 
-RUN npm install
+RUN npm install --no-audit --no-fund
 
 # Now copy the rest of the source
 COPY . .
 
-# Build shared first, then this app
-RUN npm run build -w packages/shared \
+# Wipe any stale .prisma client cache (host-generated binaries linger and
+# can confuse the engine's runtime detection), then regenerate for this
+# architecture, then build shared and this app.
+RUN rm -rf node_modules/.prisma \
+ && npx prisma generate --schema=apps/api/prisma/schema.prisma \
+ && npm run build -w packages/shared \
  && npm run build -w apps/api
 
 WORKDIR /repo/apps/api

@@ -45,20 +45,20 @@ Ship op-wechat v1: a self-hostable, multi-公众号 operations backend with **5 
 
 ## Phase 1 — M1 Skeleton (foundation, no business logic yet)
 
-**Status:** pending
+**Status:** complete
 
-- [ ] **T1.1** Init npm workspaces root: `package.json` with `workspaces: ["apps/*", "packages/*"]`
-- [ ] **T1.2** Add `tsconfig.base.json` (target ES2022, module NodeNext, strict, paths)
-- [ ] **T1.3** Add ESLint flat config + Prettier
-- [ ] **T1.4** Create `apps/api` skeleton: Fastify app, pino logger, `setErrorHandler` returning `{code,message,details}`, `/healthz`
-- [ ] **T1.5** Create `apps/webhook` skeleton: Fastify app, `/healthz`, route placeholder `/webhook/:app_id` returning 200
-- [ ] **T1.6** Create `apps/scheduler` skeleton: node entrypoint, `/healthz` (HTTP for liveness), pg-boss init
-- [ ] **T1.7** Create `apps/web` skeleton: Vite + React + TS, base layout with `App.tsx` rendering "op-wechat", `/healthz` (Vite serves `/healthz.json` static)
-- [ ] **T1.8** Create `packages/shared` skeleton: exports `AppId` branded type, `WeChatError` class
-- [ ] **T1.9** Write `docker-compose.yml` with services: `postgres` (postgres:16-alpine), `api`, `webhook`, `scheduler`, `web` (Vite dev for now, build for prod), `nginx`
-- [ ] **T1.10** Write `nginx/default.conf`: serve SPA on `/`, reverse-proxy `/api/*` → `api:3001`, `/webhook/*` → `webhook:3002`
-- [ ] **T1.11** Write `.env.example` with placeholder envs (POSTGRES_*, SESSION_SECRET, APP_ENCRYPTION_KEY)
-- [ ] **T1.12** Write `README.md` quickstart: `cp .env.example .env && docker compose up`
+- [x] **T1.1** Init npm workspaces root: `package.json` with `workspaces: ["apps/*", "packages/*"]`
+- [x] **T1.2** Add `tsconfig.base.json` (target ES2022, module NodeNext, strict, paths)
+- [x] **T1.3** Add ESLint flat config + Prettier
+- [x] **T1.4** Create `apps/api` skeleton: Fastify app, pino logger, `setErrorHandler` returning `{code,message,details}`, `/healthz`
+- [x] **T1.5** Create `apps/webhook` skeleton: Fastify app, `/healthz`, route placeholder `/webhook/:app_id` returning 200
+- [x] **T1.6** Create `apps/scheduler` skeleton: node entrypoint, `/healthz` (HTTP for liveness), pg-boss init
+- [x] **T1.7** Create `apps/web` skeleton: Vite + React + TS, base layout with `App.tsx` rendering "op-wechat", `/healthz` (Vite serves `/healthz.json` static)
+- [x] **T1.8** Create `packages/shared` skeleton: exports `AppId` branded type, `WeChatError` class
+- [x] **T1.9** Write `docker-compose.yml` with services: `postgres` (postgres:16-alpine), `api`, `webhook`, `scheduler`, `web` (Vite dev for now, build for prod), `nginx`
+- [x] **T1.10** Write `nginx/default.conf`: serve SPA on `/`, reverse-proxy `/api/*` → `api:3001`, `/webhook/*` → `webhook:3002`
+- [x] **T1.11** Write `.env.example` with placeholder envs (POSTGRES_*, SESSION_SECRET, APP_ENCRYPTION_KEY)
+- [x] **T1.12** Write `README.md` quickstart: `cp .env.example .env && docker compose up`
 
 **Acceptance:** `docker compose up` brings up all services; `curl http://localhost/healthz` (nginx) and each backend `/healthz` return 200; SPA loads in browser.
 
@@ -68,7 +68,7 @@ Ship op-wechat v1: a self-hostable, multi-公众号 operations backend with **5 
 
 ## Phase 2 — M2 Schema + auth + app management
 
-**Status:** pending
+**Status:** in_progress
 
 **Depends on:** Phase 1
 

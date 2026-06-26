@@ -1,9 +1,19 @@
 // apps/api — main entrypoint.
 //
-// Phase 1: Fastify + pino + error handler + /healthz. No business logic yet.
-// Subsequent phases (M2+) add: Prisma, auth, app management, messages, fans, etc.
+// Registers:
+//   1. prisma plugin (DB client)
+//   2. auth plugin (session + authenticate preHandler)
+//   3. wechat-token-cache plugin (per-app access_token cache)
+//   4. routes: auth, admins, apps
+// Plus: /healthz
 
 import Fastify from 'fastify';
+import prismaPlugin from './plugins/prisma.js';
+import authPlugin from './plugins/auth.js';
+import wechatTokenCachePlugin from './plugins/wechat-token-cache.js';
+import authRoutes from './routes/auth.js';
+import adminsRoutes from './routes/admins.js';
+import appsRoutes from './routes/apps.js';
 import { setErrorHandler } from './plugins/error-handler.js';
 
 const PORT = Number(process.env.PORT ?? 3001);
@@ -36,6 +46,15 @@ app.get('/healthz', async () => ({
 
 const start = async () => {
   try {
+    // Order matters: prisma first, then auth (depends on prisma), then routes.
+    await app.register(prismaPlugin);
+    await app.register(authPlugin);
+    await app.register(wechatTokenCachePlugin);
+
+    await app.register(authRoutes);
+    await app.register(adminsRoutes);
+    await app.register(appsRoutes);
+
     await app.listen({ port: PORT, host: HOST });
     app.log.info({ port: PORT }, 'api listening');
   } catch (err) {
