@@ -69,4 +69,60 @@
 
 ---
 
+## 2026-06-26 — Session 2: Phase 1 (M1 Skeleton) implementation
+
+**Context:** User chose to push existing 5 commits and start Phase 1 in this session. Docker Desktop was not running; launched via `open -a Docker`.
+
+**Phase 1 acceptance criteria** (from `task_plan.md`):
+> `docker compose up` brings up all services; `curl http://localhost/healthz` (nginx) and each backend `/healthz` return 200; SPA loads in browser.
+
+**Work done:**
+
+- Created root config: `package.json` (npm workspaces), `tsconfig.base.json`, `eslint.config.mjs`, `.prettierrc`, `.env.example`, `README.md`
+- Created `packages/shared` with `AppId` / `OpenId` / `UnionId` branded types and `WeChatError` class
+- Created `apps/api` (Fastify + pino + error envelope + `/healthz`)
+- Created `apps/webhook` (Fastify + `/webhook/:app_id` placeholder for both GET handshake and POST; + `/healthz`; XML content parser deferred to M3)
+- Created `apps/scheduler` (pg-boss init + `/healthz`; returns 503 until pg-boss started)
+- Created `apps/web` (Vite + React + TS; base `App.tsx` rendering Phase 1 placeholder; HMR working through nginx)
+- Wrote `docker-compose.yml` (6 services) and `nginx/default.conf` (root `/healthz`, `/api/` and `/webhook/` reverse-proxied, `/` → Vite with WebSocket upgrade)
+- Wrote a `Dockerfile` per backend app and a `Dockerfile` for `web` (Vite dev mode for Phase 1)
+
+**Verification:**
+- `npm install` → 301 packages, 38s
+- `tsc --noEmit` → all 4 packages (api, webhook, scheduler, shared) clean
+- `tsc --noEmit -p apps/web` → clean
+- `npm run build -w apps/{api,webhook,scheduler}` → all 3 succeed
+- `docker compose config` → valid
+- `docker compose up -d` → all 6 containers healthy/started
+- `curl /healthz` (nginx) → 200
+- `curl /api/healthz` → 200 (JSON `{status,service,version,uptime_seconds}`)
+- `curl /webhook/healthz` → 200 (JSON)
+- `curl :3003/healthz` (scheduler) → 200
+- `curl /` → HTML serving with Vite HMR script
+- `curl /src/main.tsx` → JS serving (Vite dev pipeline working)
+
+**Bug found and fixed during verification:**
+- `proxy_pass http://api_upstream;` (no trailing slash) caused nginx to forward the full original URI, so `/api/healthz` hit the API as `/api/healthz` (404). Fix: add `/` to make it `proxy_pass http://api_upstream/;`, which makes nginx replace the matched `/api/` prefix with `/`.
+- The webhook case was coincidentally returning 200 (the placeholder `/webhook/:app_id` route caught `healthz` as an `app_id`), masking the same bug. Same fix applied.
+
+**Git state:**
+- 7 commits on `main`, all pushed to GitHub:
+  ```
+  717685f fix(nginx): add trailing slash to proxy_pass for /api/ and /webhook/
+  d4e7257 feat(phase-1): M1 Skeleton — monorepo + 3 backend processes + SPA
+  091d42f plan: add task_plan.md, findings.md, progress.md (8-phase MVP plan)
+  e395737 docs: add op-wechat-mvp PRD per issue-tracker convention
+  7ca06dd docs: expand v1 scope to multi-公众号 from day 1
+  9443265 docs: resolve op meaning as open platform; frame v2 direction
+  ad74e2e chore: bootstrap repo with agents config and MVP design spec
+  ```
+
+**Status:** Phase 1 complete. Acceptance met. Stack is running at http://localhost. Ready to start Phase 2 (M2 — Schema + auth + app management) when user gives the go-ahead.
+
+**Notes for next session:**
+- The `.env` file with placeholder secrets was created from `.env.example`. For production, rotate `SESSION_SECRET` and `APP_ENCRYPTION_KEY` (note: rotating the latter requires re-encrypting all `wechat_apps.app_secret` rows).
+- 7 npm audit vulnerabilities remain (mostly transitive in devDeps); deferred to M8 polish.
+- `git status` is clean. To stop the running stack: `docker compose down`. To start: `docker compose up -d`.
+
+
 (Subsequent sessions append entries below.)
