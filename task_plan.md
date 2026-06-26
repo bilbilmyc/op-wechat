@@ -68,29 +68,34 @@ Ship op-wechat v1: a self-hostable, multi-公众号 operations backend with **5 
 
 ## Phase 2 — M2 Schema + auth + app management
 
-**Status:** in_progress
+**Status:** backend complete; frontend pending
 
 **Depends on:** Phase 1
 
-- [ ] **T2.1** Add `apps/api/prisma/schema.prisma` with all 11 tables from spec §5
-- [ ] **T2.2** Run `prisma migrate dev --name init` to generate SQL migration
-- [ ] **T2.3** Add `apps/api/src/plugins/prisma.ts` (Fastify plugin, decorates `fastify.prisma`)
-- [ ] **T2.4** Add `apps/api/src/plugins/auth.ts` (session via `@fastify/cookie` + `@fastify/session`); `POST /api/auth/login` (email+password → bcrypt), `POST /api/auth/logout`, `GET /api/auth/me`
-- [ ] **T2.5** Add `apps/api/src/routes/admins.ts`: `GET /api/admins` (list, admin-only)
-- [ ] **T2.6** Add `apps/api/src/routes/apps.ts` (CRUD on `wechat_apps`): `GET /api/apps`, `POST /api/apps`, `GET /api/apps/:id`, `PATCH /api/apps/:id`, `DELETE /api/apps/:id`. Encrypt `app_secret` and `encoding_aes_key` at write using `APP_ENCRYPTION_KEY`
-- [ ] **T2.7** Add `apps/api/src/plugins/wechat-token-cache.ts`: in-memory LRU keyed by `app_id`, refreshes from DB, exposes `getToken(appId)`. DB-backed fallback in `wechat_apps` table (add `access_token`, `token_expires_at` columns via migration)
-- [ ] **T2.8** Frontend: `apps/web/src/lib/api.ts` (typed fetch wrapper, includes `X-App-Id` header from Zustand store)
-- [ ] **T2.9** Frontend: `apps/web/src/lib/auth.ts` (TanStack Query hooks for login/logout/me, Zustand session store)
-- [ ] **T2.10** Frontend: `apps/web/src/pages/Login.tsx` (form with react-hook-form + zod)
-- [ ] **T2.11** Frontend: `apps/web/src/components/AppShell.tsx` (top nav, app switcher dropdown, user menu)
-- [ ] **T2.12** Frontend: `apps/web/src/pages/Settings/Apps.tsx` (list, add, edit, disable, delete apps — modal forms)
-- [ ] **T2.13** Frontend: `apps/web/src/stores/activeApp.ts` (Zustand: current `appId`, persisted to localStorage, sent as `X-App-Id` header)
-- [ ] **T2.14** Seed script: `apps/api/prisma/seed.ts` creating one admin (`admin@example.com` / `admin123` — change in prod) and a sample `wechat_apps` row
-- [ ] **T2.15** Vitest setup: `apps/api/vitest.config.ts`, sample test for `wechat-token-cache`
+### Backend (complete)
 
-**Acceptance:** Admin can log in; settings page lists/adds/edits/deletes `wechat_apps`; app switcher in top nav switches the active `appId`; the `X-App-Id` header is sent on every API call.
+- [x] **T2.1** Add `apps/api/prisma/schema.prisma` with all 11 tables from spec §5
+- [x] **T2.2** Run `prisma migrate dev --name init` to generate SQL migration
+- [x] **T2.3** Add `apps/api/src/plugins/prisma.ts` (Fastify plugin, decorates `fastify.prisma`)
+- [x] **T2.4** Add `apps/api/src/plugins/auth.ts` (session via `@fastify/cookie` + `@fastify/session`); `POST /api/auth/login` (email+password → bcryptjs), `POST /api/auth/logout`, `GET /api/auth/me`
+- [x] **T2.5** Add `apps/api/src/routes/admins.ts`: `GET /api/admins` (list, admin-only)
+- [x] **T2.6** Add `apps/api/src/routes/apps.ts` (CRUD on `wechat_apps`): `GET /api/apps`, `POST /api/apps`, `GET /api/apps/:id`, `PATCH /api/apps/:id`, `DELETE /api/apps/:id`. Encrypts `app_secret` and `encoding_aes_key` at write using `APP_ENCRYPTION_KEY`
+- [x] **T2.7** Add `apps/api/src/plugins/wechat-token-cache.ts`: in-memory LRU keyed by `app_id`, refreshes from DB, exposes `getToken(appId)`. DB-backed fallback in `wechat_apps` table (added `access_token`, `token_expires_at` columns)
+- [x] **T2.14** Seed script: `apps/api/prisma/seed.ts` creating one admin (`admin@example.com` / `admin123` — change in prod) and a sample `wechat_apps` row
+- [x] **T2.15** Vitest setup: `apps/api/vitest.config.ts`, 18 unit tests across 4 files (crypto, auth, token cache, env validation)
 
-**Estimated effort:** ~2 days
+### Frontend (pending)
+
+- [ ] **T2.8** `apps/web/src/lib/api.ts` (typed fetch wrapper, includes `X-App-Id` header from Zustand store)
+- [ ] **T2.9** `apps/web/src/lib/auth.ts` (TanStack Query hooks for login/logout/me, Zustand session store)
+- [ ] **T2.10** `apps/web/src/pages/Login.tsx` (form with react-hook-form + zod)
+- [ ] **T2.11** `apps/web/src/components/AppShell.tsx` (top nav, app switcher dropdown, user menu)
+- [ ] **T2.12** `apps/web/src/pages/Settings/Apps.tsx` (list, add, edit, disable, delete apps — modal forms)
+- [ ] **T2.13** `apps/web/src/stores/activeApp.ts` (Zustand: current `appId`, persisted to localStorage, sent as `X-App-Id` header)
+
+**Acceptance:** Admin can log in via the SPA; settings page lists/adds/edits/deletes `wechat_apps`; app switcher in top nav switches the active `appId`; the `X-App-Id` header is sent on every API call.
+
+**Estimated effort:** ~1.5 days (frontend only)
 
 ---
 

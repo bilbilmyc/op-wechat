@@ -126,3 +126,92 @@
 
 
 (Subsequent sessions append entries below.)
+
+---
+
+## 2026-06-26 — Session 3: Phase 2 (M2) backend + bug fixes
+
+**Context:** Phase 1 done. User asked to continue with Phase 2. The first 5 commits were pushed. Local git + Docker + Postgres all working. This session: write the M2 backend (Prisma schema, auth, apps CRUD, token cache, seed, vitest), then run TDD to find and fix real bugs.
+
+### M2 backend written (`564a9e0`)
+
+- Prisma schema with all 11 tables from spec §5, all tenant-scoped tables carrying `wechat_app_id` FK from day 1.
+- `lib/crypto.ts` — AES-256-GCM encrypt/decrypt for `app_secret` and `encoding_aes_key` at rest.
+- `lib/wechat-token-fetcher.ts` — axios wrapper for `/cgi-bin/token`.
+- `plugins/prisma.ts` — Prisma client + `onClose` disconnect.
+- `plugins/auth.ts` — `@fastify/cookie` + `@fastify/session`, `app.authenticate` preHandler.
+- `plugins/wechat-token-cache.ts` — per-app LRU + DB-backed, inflight coalesce.
+- `routes/auth.ts` — `/auth/login`, `/auth/logout`, `/auth/me`.
+- `routes/admins.ts` — list.
+- `routes/apps.ts` — full CRUD on `wechat_apps` with encrypt-on-write.
+- `prisma/seed.ts` — default admin + sample app.
+- `vitest.config.ts` + 4 crypto unit tests.
+- 1 initial migration `20260626030027_init` applied to the dev DB.
+
+**Initial verification (rejected)**: built and ran the API container, but it crashed with `PrismaClientInitializationError: libssl.so.1.1: No such file or directory`. Prisma 5.22's query engine is built against libssl 1.1; Debian 12 slim only ships libssl 3. Resolved by adding a one-shot `RUN` in `apps/api/Dockerfile` that pulls `libssl1.1` from the bullseye archive repo (Debian 11).
+
+### TDD round (`740ab2a`)
+
+Per the user's request to "先检查一下当前的代码是否bug很多，先修复修复", ran TDD to find and fix real bugs.
+
+- **Exported** `WechatTokenCache` class (was un-testable in isolation).
+- Added `test/auth.test.ts` (4 tests), `test/wechat-token-cache.test.ts` (7 tests), `test/crypto-env.test.ts` (3 tests). 18/18 passing.
+- Found and fixed two real bugs:
+  1. `apps/api` dev script ran `tsx watch` without first building the shared workspace package, so local dev failed to resolve `@op-wechat/shared`. Fixed dev script to run `npm run build -w @op-wechat/shared` first.
+  2. `auth.ts` `authenticate` decorator used `(request: any, reply: any)` — replaced with `FastifyRequest` / `FastifyReply`.
+- TDD also caught a test-design issue (concurrent-refresh test asserted on microtask timing); test was rewritten to verify end-state via `setImmediate` rather than microtask-counting.
+
+### End-to-end run (`8ca07fb`)
+
+User asked to fix the remaining bugs blocking actual API operation. Three more real bugs found and fixed:
+
+1. **Prisma runtime OpenSSL mismatch** — already addressed via libssl 1.1 in Dockerfile. After rebuild with debian-slim, the API started successfully.
+2. **No `Set-Cookie` on login response** — `@fastify/session` v10's onResponse save hook did not fire for the manual `request.session.adminId = ...` assignment. Fixed by:
+   - Setting `saveUninitialized: true` (defensive).
+   - Explicitly calling `request.session.save()` in the login handler (load-bearing fix).
+3. **Cookie marked `Secure` over plain HTTP** — `@fastify/session` default `secure: 'auto'` reads `request.protocol`, which can be `https` when the request is forwarded by a TLS-terminating proxy. Fixed by forcing `secure: false` for non-production, with a comment.
+
+### End-to-end verification (live)
+
+```
+=== /api/healthz ===          200 JSON
+=== POST /api/auth/login ===  200 + Set-Cookie: sessionId=...; HttpOnly; SameSite=Lax
+=== GET /api/auth/me ===      200 + admin user
+=== GET /api/apps ===         200 + seed app
+```
+
+### Tests
+
+- 18 unit tests pass (4 crypto, 4 auth, 7 token cache, 3 env).
+- TypeScript typecheck clean across all 4 packages.
+
+### Git state
+
+11 commits on `main`, all pushed:
+
+```
+8ca07fb fix(phase-2): unblock api container — libssl 1.1 + explicit session save
+740ab2a test(phase-2): cover password hashing, token cache, crypto env; fix two real bugs
+564a9e0 feat(phase-2): M2 backend — Prisma schema, auth, apps CRUD, token cache
+a4c7e47 docs: log Phase 1 completion in progress.md
+717685f fix(nginx): add trailing slash to proxy_pass
+d4e7257 feat(phase-1): M1 Skeleton
+091d42f plan: add task_plan.md, findings.md, progress.md
+e395737 docs: add op-wechat-mvp PRD
+7ca06dd docs: expand v1 scope to multi-公众号
+9443265 docs: resolve op meaning as open platform
+ad74e2e chore: bootstrap repo
+```
+
+### Outstanding work
+
+- **Phase 2 frontend** (T2.8–T2.13): api client, auth hooks, Login page, AppShell, Settings/Apps, activeApp store.
+- **Phase 2 apps routes integration test** (task #27, optional): testcontainers + real PG.
+- **Phases 3–8**: inbound pipeline, outbound reply, fan mgmt, auto-reply rules, broadcast, polish.
+
+### Notes for next session
+
+- The seed admin is `admin@example.com` / `admin123` — change before any non-local use.
+- The Prisma libssl-1.1 hack in `apps/api/Dockerfile` is annotated; remove when Prisma is upgraded to 6.x.
+- 12 npm audit vulnerabilities remain (mostly transitive devDeps); deferred to M8 polish.
+- For dev iteration: stop the API container and run `npm run dev:api` from the host (after `docker compose up postgres`); saves a full container rebuild per code change.
