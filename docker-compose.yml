@@ -1,0 +1,93 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-opwechat}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-opwechat_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-opwechat}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-opwechat}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-opwechat}:${POSTGRES_PASSWORD:-opwechat_dev_password}@postgres:5432/${POSTGRES_DB:-opwechat}
+      SESSION_SECRET: ${SESSION_SECRET}
+      APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY}
+      WECHAT_API_BASE: ${WECHAT_API_BASE}
+      PORT: 3001
+    ports:
+      - "${API_PORT:-3001}:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  webhook:
+    build:
+      context: .
+      dockerfile: apps/webhook/Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-opwechat}:${POSTGRES_PASSWORD:-opwechat_dev_password}@postgres:5432/${POSTGRES_DB:-opwechat}
+      PORT: 3002
+    ports:
+      - "${WEBHOOK_PORT:-3002}:3002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: apps/scheduler/Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-opwechat}:${POSTGRES_PASSWORD:-opwechat_dev_password}@postgres:5432/${POSTGRES_DB:-opwechat}
+      PORT: 3003
+    ports:
+      - "${SCHEDULER_PORT:-3003}:3003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    environment:
+      VITE_API_BASE: /api
+    ports:
+      - "${WEB_PORT:-5173}:5173"
+    volumes:
+      - ./apps/web:/app
+      - /app/node_modules
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+    depends_on:
+      - api
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - api
+      - webhook
+      - web
+
+volumes:
+  postgres-data:

@@ -1,0 +1,26 @@
+{
+  "name": "@op-wechat/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^9.3.1",
+    "@fastify/session": "^10.9.0",
+    "@op-wechat/shared": "*",
+    "fastify": "^4.26.2",
+    "pino": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "pino-pretty": "^11.0.0",
+    "tsx": "^4.7.2",
+    "typescript": "^5.4.5"
+  }
+}
