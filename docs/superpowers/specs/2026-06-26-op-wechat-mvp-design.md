@@ -15,21 +15,25 @@ The product exists to remove the need to log into 微信公众平台 for routine
 ### Resolved decisions
 
 - **"op" meaning** — "open platform" (confirmed 2026-06-26).
-- **Multi-公众号 in v1** — single app in v1 UI. Multi-app UI deferred to v2. See §11 for the full open-platform deferral.
+- **Multi-公众号 in v1** — **v1 ships multi-app from day 1**. The admin manages 2+ public accounts side-by-side, each with its own fans, messages, rules, broadcasts, and menu. The UI has an app switcher; the backend routes per-app; tokens and rate limits are scoped per app. Cross-app fan linking (unified fan view, search across apps, unionid-based merge) remains v2 — see §11.
 
 ## 2. v1 Scope
 
 ### In scope (must ship)
 
+**Multi-app** is a cross-cutting v1 requirement. Every module below must work for 2+ public accounts managed in the same installation.
+
 | Module | Acceptance criteria |
 |---|---|
-| Fan management | List (paged, search, tag filter), detail view, remark edit, tag CRUD synced to WeChat |
-| Customer-service reply | Inbox list, conversation view, text / image reply, unread count, reply history |
-| Mass broadcast | Compose (text / image / link), send now, schedule send, send history, manual retry of failed |
-| Auto-reply rules | Subscribe reply, keyword reply (exact + fuzzy), menu-click reply, rule CRUD, execution log |
+| App management | App switcher in top nav, settings page to add / edit / disable / delete `wechat_apps` rows, per-app QR display, per-app health indicator (token status) |
+| Fan management | Per-app list (paged, search, tag filter), per-app detail view, per-app remark edit, per-app tag CRUD synced to WeChat |
+| Customer-service reply | Per-app inbox list, per-app conversation view, text / image reply, unread count, reply history |
+| Mass broadcast | Per-app compose (text / image / link), per-app send now, per-app schedule send, per-app send history, per-app manual retry of failed |
+| Auto-reply rules | Per-app subscribe reply, per-app keyword reply (exact + fuzzy), per-app menu-click reply, per-app rule CRUD, per-app execution log |
 
 ### Out of scope (v1 explicitly excludes)
 
+- **Cross-app fan linking** — fans are siloed per app. Unionid is stored but not yet used to merge / link fans across apps. v2.
 - Multi-tenant / SaaS billing
 - Workflow engine (DAG-style automation). v1 rules are match-and-respond, not composed flows.
 - Rich-text editor (markdown + image links only)
@@ -38,6 +42,7 @@ The product exists to remove the need to log into 微信公众平台 for routine
 - Analytics dashboards
 - Ticketing system
 - Customer-service @-mentions and collaborative editing
+- Per-app admin RBAC (any admin can see all apps in v1; assignment comes with multi-tenant in v2)
 
 ## 3. Architecture
 
@@ -70,13 +75,20 @@ Three independent Node/TypeScript processes + one PostgreSQL + one static fronte
 
 ### Process responsibilities
 
-- **`api`** — handles admin requests, calls WeChat outbound APIs, returns data
-- **`webhook`** — receives WeChat pushes, verifies signature, parses XML, decrypts, persists, returns 200 within 5 seconds. Heavy work (rule firing, SSE fan-out) is enqueued and runs out-of-band.
-- **`scheduler`** — periodic jobs: access_token refresh, scheduled broadcasts, pending-write retries. Uses `pg-boss` for queue + cron in the same Postgres.
+- **`api`** — handles admin requests, scoped by selected `wechat_app_id`. Calls WeChat outbound APIs using the per-app cached token. Returns data filtered to the current app.
+- **`webhook`** — receives WeChat pushes on a single per-app URL (`/webhook/{app_id}` or routed by query param), verifies signature, parses XML, decrypts, persists to the app's data, returns 200 within 5 seconds. Heavy work (rule firing, SSE fan-out) is enqueued and runs out-of-band.
+- **`scheduler`** — periodic jobs per `wechat_apps` row: access_token refresh, scheduled broadcasts, pending-write retries. Uses `pg-boss` for queue + cron in the same Postgres.
 
-### Tenant model
+### Multi-app model (v1)
 
-v1 is single-tenant. `wechat_apps` table allows multiple rows for forward compatibility, but the UI assumes one app. Multi-tenant is v2.
+v1 supports 2+ public accounts in one installation:
+
+- The SPA shows an **app switcher** in the top nav. All in-app views (fans, messages, rules, broadcasts) are filtered by the selected app.
+- The API carries the active `wechat_app_id` (header / cookie / path) and the backend filters every query.
+- `wechat_apps` rows hold credentials (`app_secret`, `token`, `encoding_aes_key`) and per-app settings (broadcast rate limit, default menu).
+- `access_token` is cached **per app** (in-memory in `api` process, persisted in DB for cross-process sharing and cold restart).
+- Auto-reply rules, broadcasts, fans, messages are all scoped by `wechat_app_id`. There is no cross-app fan view in v1 — that is part of the open-platform surface deferred to v2.
+- Any admin can see any app. Per-app RBAC is v2.
 
 ### Real-time updates
 
@@ -153,14 +165,15 @@ SSE streams from `api` to the SPA for: new inbound message, message status chang
 
 ```
 WeChat POST /webhook/{app_id}
-  1. Verify signature (sha1, ~2ms)
-  2. Parse XML (~1-5ms)
-  3. If encrypted, AES decrypt (~1-3ms)
-  4. Persist (insert message + upsert conversation + update fan last_active_at)
+  1. Resolve wechat_apps row by app_id (~5ms)
+  2. Verify signature using that app's token (~2ms)
+  3. Parse XML (~1-5ms)
+  4. If encrypted, AES decrypt with that app's encoding_aes_key (~1-3ms)
+  5. Persist scoped to that app (insert message + upsert conversation + update fan last_active_at)
      Target total < 200ms
-  5. 200 OK
-  6. Enqueue: rule.evaluate(message_id) → out-of-band
-  7. Enqueue: sse.fanout(message_id) → out-of-band
+  6. 200 OK
+  7. Enqueue: rule.evaluate(message_id) → out-of-band
+  8. Enqueue: sse.fanout(message_id) → out-of-band
 ```
 
 Steps 6-7 run via pg-boss. If they fail, the message is still in `messages`; the admin can see it. Failures do not cause WeChat retries (the 200 has already been sent).
@@ -213,11 +226,11 @@ rule.evaluate(message_id) job:
 ### Flow 5: access_token refresh
 
 ```
-Every 100 minutes:
-  1. For each wechat_apps row, check cached token expiry
-  2. If within 10 min of expiry (or no cache): call /cgi-bin/token
-  3. Persist to DB-backed cache
-  4. On failure: retry at 5/15/60 min, max 3, then alert via SSE banner
+Every 100 minutes, per wechat_apps row:
+  1. For each app, check the cached token expiry (in-memory LRU + DB-backed)
+  2. If within 10 min of expiry (or no cache): call /cgi-bin/token with that app's app_id / app_secret
+  3. Persist to in-memory cache + DB row
+  4. On failure: retry at 5/15/60 min, max 3, then alert via SSE banner tagged with the failing app_id
 ```
 
 ## 7. Error Handling
@@ -267,16 +280,18 @@ Secrets via `.env` (gitignored). `app_secret` and `encoding_aes_key` are also en
 
 ## 10. Milestones (informational — final plan comes from `writing-plans`)
 
-M1. Skeleton: repo structure, docker-compose up, blank SPA served, /healthz on each backend service.
-M2. Schema + auth: Prisma migrations applied, admin can log in.
-M3. Inbound pipeline: webhook verifies, persists, messages appear in admin inbox (read-only).
-M4. Outbound reply: admin can send text / image reply, message status updates.
-M5. Fan management: list / detail / tag / remark.
-M6. Auto-reply rules: rule CRUD, execution log, manual test.
-M7. Broadcast: compose, send now, schedule, history, retry.
+M1. Skeleton: repo structure, docker-compose up, blank SPA served, /healthz on each backend service. Per-app URL routing placeholders in place.
+M2. Schema + auth + app management: Prisma migrations applied, admin can log in, app switcher renders, settings page can add / edit / disable `wechat_apps` rows. Per-app token cache plumbing in place.
+M3. Inbound pipeline: webhook routes by `app_id`, verifies, persists, messages appear in the right app's inbox (read-only).
+M4. Outbound reply: admin can send text / image reply through the active app's token; message status updates via SSE.
+M5. Fan management: per-app list / detail / tag / remark; tag CRUD syncs to WeChat.
+M6. Auto-reply rules: per-app rule CRUD, execution log, manual test.
+M7. Broadcast: per-app compose, send now, schedule, history, retry.
 M8. Polish: error pages, empty states, settings page, basic docs.
 
 ## 11. Out-of-scope deferral list (v2+)
+
+**Cross-app fan linking (unionid-based)** is now also explicitly v2: in v1, fans are siloed per app even though `unionid` is collected. The unified / merged fan view, cross-app search, and the API surface for third-party developers to query a fan by unionid across apps are all v2 work.
 
 - Multi-tenant: tenant table, isolation middleware, per-tenant rate limits, billing
 - Workflow engine: rule chaining, branching, delayed actions
